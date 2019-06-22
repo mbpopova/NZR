@@ -1,0 +1,62 @@
+<project name="MyProject" default="distribute" basedir=".">
+	<description>
+        NZR DC build file
+    </description>
+	<!-- set global properties for this build -->
+	<property name="src" location="src/main/java"/>
+	<property name="build" location="build"/>
+	<property name="dist"  location="dist"/>
+	<property name="lib"  location="lib"/>
+	<property name="res"  location="src/main/resources"/>
+
+
+
+	<target name="init" depends = "clean">
+		<!-- Create the time stamp -->
+		<tstamp/>
+		<!-- Create the build directory structure used by compile -->
+		<mkdir dir="${build}"/>
+	</target>
+
+	<target name="compile" depends="init" description="compile the source ">
+
+		<!-- Compile the java code from ${src} into ${build} -->
+		<javac srcdir="${src}" destdir="${build}">
+			<classpath>
+				<fileset dir="lib">
+					<include name="**/*.jar" />
+				</fileset>
+			</classpath>
+		</javac>
+	</target>
+
+	<target name="distribute" depends="compile, copy-files, copy-libs" description="generate the distribution">
+		<!-- Create the distribution directory -->
+		<mkdir dir="${dist}/lib"/>
+
+		<!-- Put everything in ${build} into the MyProject-${DSTAMP}.jar file -->
+		<jar jarfile="${dist}/lib/MyProject-${DSTAMP}.jar" basedir="${build}"/>
+	</target>
+
+	<target name="clean"
+        description="clean up" >
+		<!-- Delete the ${build} and ${dist} directory trees -->
+		<delete dir="${build}"/>
+		<delete dir="${dist}"/>
+	</target>
+	
+	<target name="copy-files">
+	<mkdir dir="${dist}/ctx"/>
+	<copy todir="${dist}/ctx">
+		<fileset dir="${res}" />
+	</copy>
+	</target>
+	
+	<target name="copy-libs">
+	<copy todir="${dist}/lib">
+		<fileset dir="${lib}" />
+	</copy>
+
+</target>
+    
+</project>

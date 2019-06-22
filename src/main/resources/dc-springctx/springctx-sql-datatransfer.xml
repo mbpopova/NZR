@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+        http://www.springframework.org/schema/context 
+        http://www.springframework.org/schema/context/spring-context-3.0.xsd">
+
+	<context:annotation-config />
+
+	<bean id="dataTransferSqlBuilder" class="mycompany.nzr.dc.sqlbuilder.DataCaptureTransferSqlBuilder">
+		<property name="sql">
+			<map>
+				<entry>
+					<key>
+						<value>localTextFormatSQL</value>
+					</key>
+					<value>
+						create external table ? 
+						using
+						(
+						Format 'text'
+						BoolStyle '1_0'
+						CRinString true
+						DateStyle 'YMD'
+						Delimiter 01
+						EscapeChar '\'
+						LogDir ? 
+						NullValue 'NULL'
+						)
+						as						
+					</value>
+				</entry>
+
+				<entry>
+					<key>
+						<value>remoteTextFormatSQL</value>
+					</key>
+					<value>
+						create external table ? 
+						using
+						(
+						Format 'text'
+						BoolStyle '1_0'
+						CRinString true
+						DateStyle 'YMD'
+						Delimiter 01
+						EscapeChar '\'
+						LogDir ? 
+						NullValue 'NULL'
+						RemoteSource 'JDBC'
+						)
+						as
+					</value>
+				</entry>
+
+				<entry>
+					<key>
+						<value>localInteralFormatSQL</value>
+					</key>
+					<value>
+						create external table ? 
+						using
+						(
+						Format 'internal'
+						LogDir ? 
+						--based on rules
+						Compress true
+						)
+						as
+					</value>
+				</entry>
+
+				<entry>
+					<key>
+						<value>remoteInteralFormatSQL</value>
+					</key>
+					<value>
+						create external table ?
+						using
+						(
+						Format 'internal'
+						LogDir ?
+						Compress true
+						RemoteSource 'JDBC'
+						)
+						as
+					</value>
+				</entry>
+			</map>
+		</property>
+	</bean>
+</beans>

@@ -1,0 +1,417 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+        http://www.springframework.org/schema/context 
+        http://www.springframework.org/schema/context/spring-context-3.0.xsd">
+
+	<context:annotation-config />
+	<bean id="repoCommonSqlBuilder" class="mycompany.nzr.dp.sqlbuilder.RepoCommonSqlBuilder">
+		<property name="sql">
+			<map>
+
+				<entry>
+					<key><value>pkColsDetailsSql</value></key>
+					<value><!--  
+						select
+						a.TABLE_SKEY,
+						a.ATTRIBUTE_NAME,
+						a.DATATYPE,
+						a.DATA_LENGTH,
+						a.DATA_PRECISION,
+						a.DATA_SCALE
+						from
+						NZR_DC_DETAIL_ATTRIBUTES a
+						inner join
+						NZR_DC_CONSTRAINTS cn
+						on
+						(
+						a.table_skey = cn.table_skey
+						)
+						where
+						a.TABLE_SKEY = ? and
+						cn.
+						CONSTRAINT_TYPE in ('p','P')-->
+						
+						
+						WITH mydata AS
+						  (SELECT col.table_skey,
+						    col.attribute_name,
+						    col.datatype,
+						    col.data_length,
+						    col.data_precision,
+						    col.data_scale,
+						    col.dc_batch_skey
+						  FROM nzr_dc_detail_attr_hist col
+						  INNER JOIN nzr_dc_constraint_attr_hist cncol
+						  ON ( col.table_skey    = cncol.table_skey
+						  AND col.dc_batch_skey  = cncol.dc_batch_skey
+						  AND col.attribute_name = cncol.attribute_name )
+						  INNER JOIN nzr_dc_constraint_hist cn
+						  ON (cn.constraint_skey  = cncol.constraint_skey)
+						  WHERE col.table_skey    = ?
+						  AND cn.constraint_type IN ('p','P')
+						  )
+						SELECT *
+						FROM mydata
+						WHERE dc_batch_skey =
+						  (
+						  	  SELECT MAX(h.dc_batch_skey)
+							  FROM nzr_dc_detail_attr_hist h
+							  INNER JOIN nzr_dc_batch b
+							  ON h.dc_batch_skey      = b.dc_batch_skey
+						      WHERE b.dc_batch_status = 'COMPLETED'  AND h.dc_batch_skey &lt;= ?
+						  )
+					</value>
+				</entry>
+
+
+				<entry>
+					<key>
+						<value>pkColsListSql</value>
+					</key>
+					<value>
+			WITH d1 AS
+  (SELECT ca.constraint_attribute_position,
+    ca.attribute_name,
+    row_number() over (order by ca.constraint_attribute_position DESC) AS rn
+  FROM NZR_DC_CONSTRAINT_hist C
+  INNER JOIN NZR_DC_CONSTRAINT_ATTR_Hist CA
+  ON ( CA.TABLE_SKEY     = C.TABLE_SKEY
+  AND CA.CONSTRAINT_SKEY = C.CONSTRAINT_SKEY)
+  WHERE c.table_skey     = ? 
+  AND C.CONSTRAINT_TYPE IN ('p','P')
+  ),
+  d AS
+  (SELECT constraint_attribute_position,
+    attribute_name,
+    rn,
+    SUBSTR(sys_connect_by_path(attribute_name,','),2) AS cols
+  FROM d1
+    START WITH constraint_attribute_position       = 1
+    CONNECT BY prior constraint_attribute_position = (constraint_attribute_position-1)
+  )
+SELECT cols FROM d WHERE rn = 1
+					</value>
+				</entry>
+
+
+					<entry>
+					<key>
+						<value>batchFileToPropagateSql</value>
+					</key>
+						<value>
+	SELECT bdtl.dc_batch_skey,
+			bdtl.dc_batch_dtl_skey,
+			bdtl.insert_cnt,
+			bdtl.delete_cnt,
+			bdtl.ddl_flag,
+			dcdtl.table_name,
+			dcdtl.table_skey,
+			fld.folder_name,
+			f.file_name,
+			f.file_location,
+			f.file_format
+	FROM nzr_dc_batch_detail bdtl
+			INNER JOIN nzr_dc_detail dcdtl	ON dcdtl.table_skey = bdtl.table_skey
+			INNER JOIN nzr_stg_file f ON f.dc_batch_dtl_skey = bdtl.dc_batch_dtl_skey
+			INNER JOIN nzr_stg_folder fld ON fld.folder_skey = f.folder_skey
+	WHERE bdtl.dc_batch_skey = ?		
+	
+						</value>
+				</entry>		
+		
+   <entry>
+	<key>
+		<value>startBatch_Sql</value>
+	</key>
+	<value>
+		INSERT INTO nzr_dp_batch
+		(
+		        dp_batch_skey,
+				subscription_skey,
+				dc_skey,
+				dc_batch_skey,
+				dp_batch_start_ts,
+				dp_batch_status,
+				dp_batch_type
+		)
+		VALUES
+		(
+		  ?, ?, ?, ?, SYSDATE, ?, ?
+		)
+	</value>
+   </entry>
+
+	<entry>
+		<key>
+			<value>endBatch_Sql</value>
+		</key>
+		<value>
+			UPDATE nzr_dp_batch
+			SET dp_batch_end_ts = ?, dp_batch_status = ?
+			WHERE dp_batch_skey =
+			?
+		</value>
+	</entry>	
+	
+	<entry>
+	<key>
+		<value>startBatchTable_Sql</value>
+	</key>
+	<value>
+	   INSERT INTO nzr_dp_batch_detail
+	   (
+	      dp_batch_dtl_skey,
+	      dp_batch_skey,
+	      subscription_skey,
+	      dc_batch_skey,
+	      dc_batch_dtl_skey,
+	      dst_object_id,
+	      dp_batch_start_ts,
+	      table_skey,
+	      dp_batch_dtl_status,
+	      action_code
+	   )
+	   VALUES
+	   (
+	      ?, ?, ?, ?, ?, ?, SYSDATE, ?, ?, ?
+	   )
+	</value>
+	</entry>
+	
+	<entry>
+	<key>
+		<value>updateBatchTable_Sql</value>
+	</key>
+	<value>
+	   UPDATE nzr_dp_batch_detail
+	   SET insert_cnt = ?, delete_cnt = ?, ddl_flag = ?, action_code = ?
+	   WHERE dp_batch_dtl_skey = ?
+	</value>
+	</entry>
+	
+	<entry>
+	<key>
+		<value>endBatchTableSql</value>
+	</key>
+	<value>
+	   UPDATE nzr_dp_batch_detail
+	   SET dp_batch_end_ts = SYSDATE, dp_batch_dtl_status = ?, action_code = ?
+	   WHERE dp_batch_dtl_skey = ?
+	</value>
+	</entry>
+	
+	
+	
+	<entry>
+	<key>
+		<value>batchPkValueSql</value>
+	</key>
+	<value>
+	     SELECT NZR_DP_BATCH_SEQ.nextval FROM dual
+	</value>
+	</entry>
+	
+	<entry>
+	<key>
+		<value>batchDetailPkValueSql</value>
+	</key>
+	<value>
+	     SELECT NZR_DP_BATCH_DETAIL_SEQ.nextval FROM dual
+	</value>
+	</entry>
+	
+	
+	<entry>
+	<key>
+		<value>batchToPropagateSql</value>
+	</key>
+	<value>
+		WITH mydata AS
+		(
+		SELECT
+				dcbatch.dc_batch_skey,
+				dcbatch.dc_batch_start_ts ,
+				dcbatch.dc_batch_type,
+				dpbatch.dc_batch_skey as dpbatch,
+        MAX(CASE WHEN dpbatch.dp_batch_status = 'COMPLETED' THEN 1 ELSE 0 END) as dpstatus,
+				dcbatch.dc_skey,
+				sum(dtl.insert_cnt) as batch_insert_cnt,
+				sum(dtl.delete_cnt) as batch_delete_cnt,
+				sum(dtl.ddl_flag) as batch_ddl_flag,
+				dp.subscription_skey,
+				dp.drop_if_exists
+		FROM nzr_dc_batch dcbatch
+		LEFT OUTER JOIN nzr_dp_batch dpbatch on dpbatch.dc_batch_skey =	dcbatch.dc_batch_skey
+		INNER JOIN nzr_dp_subscription dp on dp.dc_skey = dcbatch.dc_skey
+		INNER JOIN nzr_dc_batch_detail dtl on dtl.dc_batch_skey = dcbatch.dc_batch_skey
+		WHERE
+				dcbatch.dc_batch_status = 'COMPLETED' AND
+				(SYSDATE - dcbatch.dc_batch_end_ts) >=
+				TO_DSINTERVAL('0 00: ' || dp.minimal_delay || ':00')  
+				AND
+				dp.host_skey = ? AND
+				dp.target_database_name = ?
+		GROUP BY
+				dcbatch.dc_batch_skey,
+				dpbatch.dc_batch_skey,
+				dcbatch.dc_skey,
+				dp.subscription_skey,
+				dcbatch.dc_batch_start_ts,
+				dcbatch.dc_batch_type,
+				dp.drop_if_exists
+		)
+		SELECT DISTINCT
+				dc_batch_skey,
+				dc_batch_start_ts,
+				dc_skey,
+				subscription_skey,
+				dc_batch_type
+		FROM mydata
+		WHERE
+		(dpbatch IS NULL or dpstatus &lt;&gt; 1)and
+		(
+				batch_insert_cnt > 0 or
+				batch_delete_cnt > 0 or
+				batch_ddl_flag > 0
+		)
+		ORDER BY dc_batch_start_ts ASC
+	</value>
+</entry>
+    
+	
+	<entry>
+	<key>
+		<value>targetSystemsWithPropagatableBatchesSql</value>
+	</key>
+	<value>
+		WITH mydata AS
+		(
+		SELECT
+		        dpbatch.dc_batch_skey dpbatch,
+				MAX(CASE WHEN dpbatch.dp_batch_status = 'COMPLETED' THEN 1 ELSE 0 END) AS dpstatus,
+				SUM(dtl.insert_cnt) as batch_insert_cnt,
+				SUM(dtl.delete_cnt) as batch_delete_cnt,
+				SUM(dtl.ddl_flag) as batch_ddl_flag,
+		        dp.target_database_name as database_name,
+		        h.dns_ip,
+		        h.host_port,
+		        h.username,
+		        h.password,
+		        h.host_skey
+		FROM 
+				nzr_dc_batch dcbatch
+		LEFT OUTER JOIN 
+		        nzr_dp_batch dpbatch ON dpbatch.dc_batch_skey =	dcbatch.dc_batch_skey
+		INNER JOIN 
+		        nzr_dp_subscription dp ON dp.dc_skey = dcbatch.dc_skey
+		INNER JOIN 
+		        nzr_dc_batch_detail dtl ON dtl.dc_batch_skey = dcbatch.dc_batch_skey
+        INNER JOIN 
+                nzr_host h ON h.host_skey = dp.host_skey
+		WHERE
+				dcbatch.dc_batch_status = 'COMPLETED' AND
+				(SYSDATE - dcbatch.dc_batch_end_ts) >=
+				TO_DSINTERVAL('0 00: ' || dp.minimal_delay || ':00') 
+		GROUP BY
+				dpbatch.dc_batch_skey,
+		        dp.target_database_name,
+		        h.dns_ip,
+		        h.host_port,
+		        h.username,
+		        h.password,
+		        h.host_skey,
+		        dpbatch.dp_batch_status
+				)
+		SELECT DISTINCT
+		        host_skey,
+		        database_name,
+		        dns_ip,
+		        host_port,
+		        username,
+		        password
+		FROM mydata
+		WHERE
+				(dpbatch IS NULL or dpstatus &lt;&gt; 1) AND
+				(
+						batch_insert_cnt > 0 or
+						batch_delete_cnt > 0 or
+						batch_ddl_flag > 0
+				)
+	
+	</value>
+</entry>
+              
+ <entry>
+	<key>
+		<value>pkByTableSql</value>
+	</key>
+	<value>
+		SELECT
+		relation AS table_name,
+		constraintname AS constraint_name
+		FROM
+		_V_RELATION_KEYDATA
+		WHERE
+		contype IN ('p','P') AND
+		table_name IN (?)
+	</value>
+</entry>
+
+
+<entry>
+	<key>
+		<value>fkByPkTableSql</value>
+	</key>
+	<value>
+		SELECT
+			relation AS table_name
+			constraintname as constraint_name,
+			conseq AS column_position,
+			attname AS column_name,
+			pkrelation AS pk_table,
+			pkattname AS pk_column
+		FROM
+		_V_RELATION_KEYDATA
+		WHERE
+		     contype in ('f','F') AND
+		     pkrelation IN (?)
+		ORDER_BY
+		relation,
+		constraintname,
+		conseq
+	</value>
+</entry>
+ 
+<entry>
+	<key>
+		<value>fkByFkTableSql</value>
+	</key>
+	<value>
+		SELECT
+			relation AS table_name
+			constraintname as constraint_name
+		FROM
+		_V_RELATION_KEYDATA
+		WHERE
+		     contype in ('f','F') AND
+		     relation IN (?)
+		ORDER_BY
+		relation,
+		constraintname,
+		conseq
+	</value>
+</entry>
+
+
+	    
+    </map>
+  </property>
+ </bean>
+
+</beans> 
+
+
+					

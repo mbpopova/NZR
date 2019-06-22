@@ -1,0 +1,598 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+        http://www.springframework.org/schema/context 
+        http://www.springframework.org/schema/context/spring-context-3.0.xsd">
+
+	<context:annotation-config />
+
+	<bean id="repoCommonSqlBuilder" class="mycompany.nzr.dc.sqlbuilder.DataCaptureRepoSqlBuilder">
+    <property name="sql">
+	  <map>
+		 <entry>
+	<key>
+		<value>lowStableXidSql</value>
+	</key>
+	<value>
+		<!-- select high_stable_xid from nzr_dc_batch where dc_batch_start_ts = 
+			(select max(dc_batch_start_ts) from nzr_dc_batch) -->
+		SELECT NVL(MAX(high_stable_xid), 0) AS lowxid
+		FROM
+		(
+			SELECT high_stable_xid 
+			FROM nzr_dc_batch b
+			INNER JOIN nzr_dc_batch_detail det ON b.dc_batch_skey = det.dc_batch_skey
+		  WHERE det.table_skey = ? AND b.dc_batch_skey &lt; ? AND b.dc_batch_status = 'COMPLETED'
+     )
+	</value>
+</entry>
+	       
+<entry>
+ <key><value>tableChangedIndSql</value></key>
+  <value>
+	WITH data AS
+	(
+	SELECT 
+	   dtl.src_object_id, dtl.table_name,
+			CASE
+			WHEN dtl.table_name != wrkt.table_name
+			THEN 1
+			ELSE 0
+			END AS table_name_change_ind,
+	dtl.src_object_id AS prev_oid,
+	wrkt.src_object_id AS curr_oid,
+			CASE
+			WHEN dtl.src_object_id != wrkt.src_object_id
+			THEN 1
+			ELSE 0
+			END AS oid_change_ind,
+	dtl.last_ddl_ts AS prev_ddl_ts,
+	wrkt.last_ddl_ts AS curr_ddl_ts,
+			CASE
+			WHEN dtl.last_ddl_ts != wrkt.last_ddl_ts
+			THEN 1
+			ELSE 0
+			END AS ddl_ts_change_ind,
+	dtl.column_cnt AS prev_column_cnt,
+	wrkt.column_cnt AS curr_column_cnt,
+			CASE
+			WHEN dtl.column_cnt != wrkt.column_cnt
+			THEN 1
+			ELSE 0
+			END AS column_cnt_change_ind,
+	dtl.table_comment AS prev_comment,
+	wrkt.table_comment AS curr_comment,
+			CASE
+			WHEN dtl.table_comment != wrkt.table_comment
+			OR (dtl.table_comment IS NOT NULL
+			AND wrkt.table_comment IS NULL)
+			OR (dtl.table_comment IS NULL
+			AND wrkt.table_comment IS NOT NULL)
+			THEN 1
+			ELSE 0
+			END AS comment_change_ind
+	FROM (SELECT * FROM nzr_dc_detail_hist WHERE dc_batch_skey = ?) dtl 
+	 	FULL OUTER JOIN nzr_wrk_table wrkt ON (wrkt.table_skey = dtl.table_skey)
+	WHERE
+	  wrkt.dc_batch_skey = ? 
+	)
+	SELECT 
+			src_object_id,
+			table_name,
+			GREATEST(oid_change_ind, ddl_ts_change_ind, column_cnt_change_ind) AS table_rebuilt_ind,
+			table_name_change_ind AS table_renamed_ind,
+			comment_change_ind AS table_comment_changed_ind
+	FROM data
+	WHERE table_name = ?
+ </value>
+</entry>
+	   
+<entry>
+<key><value>tableOrgChangedIndSql</value></key>
+<value>
+			WITH data AS
+			  (
+			   SELECT 
+			    wrkt.src_object_id,
+			    dattr.table_skey,
+			    dattr.attribute_name AS prev_attr_name,
+			    wrk.attribute_name   AS curr_attr_name,
+			    CASE
+			      WHEN dattr.attribute_name != wrk.attribute_name
+			      THEN 1
+			      ELSE 0
+			    END AS name_change_ind,
+			    dattr.attribute_position,
+			    dattr.datatype AS prev_datatype,
+			    wrk.datatype   AS curr_datatype,
+			    CASE
+			      WHEN dattr.datatype != wrk.datatype
+			      THEN 1
+			      ELSE 0
+			    END               AS datatype_change_ind,
+			    dattr.data_length AS prev_data_length,
+			    wrk.data_length   AS curr_data_length,
+			    CASE
+			      WHEN dattr.data_length != wrk.data_length
+			      THEN 1
+			      ELSE 0
+			    END                  AS data_length_change_ind,
+			    dattr.data_precision AS prev_data_precision,
+			    wrk.data_precision   AS curr_data_precision,
+			    CASE
+			      WHEN dattr.data_precision != wrk.data_precision
+			      THEN 1
+			      ELSE 0
+			    END              AS data_precision_change_ind,
+			    dattr.data_scale AS prev_data_scale,
+			    wrk.data_scale   AS curr_data_scale,
+			    CASE
+			      WHEN dattr.data_scale != wrk.data_scale
+			      THEN 1
+			      ELSE 0
+			    END            AS data_scale_change_ind,
+			    dattr.nullable AS prev_nullable,
+			    wrk.nullable   AS curr_nullable,
+			    CASE
+			      WHEN dattr.nullable != wrk.nullable
+			      THEN 1
+			      ELSE 0
+			    END                 AS nullable_change_ind,
+			    dattr.dist_position AS prev_dist_position,
+			    wrk.dist_position   AS curr_dist_position,
+			    CASE
+			      WHEN dattr.dist_position != wrk.dist_position
+			      OR (dattr.dist_position  IS NOT NULL
+			      AND wrk.dist_position    IS NULL)
+			      OR (dattr.dist_position  IS NULL
+			      AND wrk.dist_position    IS NOT NULL)
+			      THEN 1
+			      ELSE 0
+			    END                AS dist_change_ind,
+			    dattr.org_position AS prev_org_position,
+			    wrk.org_position   AS curr_org_position,
+			    CASE
+			      WHEN dattr.org_position != wrk.org_position
+			      OR (dattr.org_position  IS NOT NULL
+			      AND wrk.org_position    IS NULL)
+			      OR (dattr.org_position  IS NULL
+			      AND wrk.org_position    IS NOT NULL)
+			      THEN 1
+			      ELSE 0
+			    END                 AS org_change_ind,
+			    dattr.default_value AS prev_default,
+			    wrk.default_value   AS curr_default,
+			    CASE
+			      WHEN dattr.default_value != wrk.default_value
+			      OR (dattr.default_value  IS NOT NULL
+			      AND wrk.default_value    IS NULL)
+			      OR (dattr.default_value  IS NULL
+			      AND wrk.default_value    IS NOT NULL)
+			      THEN 1
+			      ELSE 0
+			    END                  AS default_change_ind,
+			    dattr.column_comment AS prev_comment,
+			    wrk.column_comment   AS curr_comment,
+			    CASE
+			      WHEN dattr.column_comment != wrk.column_comment
+			      OR (dattr.column_comment  IS NOT NULL
+			      AND wrk.column_comment    IS NULL)
+			      OR (dattr.column_comment  IS NULL
+			      AND wrk.column_comment    IS NOT NULL)
+			      THEN 1
+			      ELSE 0
+			    END AS comment_change_ind
+			  FROM
+			    (SELECT * FROM nzr_dc_detail_attr_hist WHERE dc_batch_skey = ?) dattr		
+			    	
+			  FULL OUTER JOIN (SELECT * FROM nzr_wrk_table_attr WHERE dc_batch_skey = ?) wrk
+			     ON ( wrk.table_skey        = dattr.table_skey
+			     AND wrk.attribute_position = dattr.attribute_position )
+			
+			  INNER JOIN nzr_wrk_table wrkt 
+			     ON ( wrkt.table_skey = wrk.table_skey)
+			)SELECT 
+			  data.table_skey,
+			  dtl.table_name,
+			  src_object_id,
+			  MAX(greatest(name_change_ind, org_change_ind, default_change_ind, comment_change_ind, data_length_change_ind)) AS table_columns_changed_ind,
+			  MAX(org_change_ind)                                                                                            AS table_org_changed_ind
+			FROM data 
+			INNER JOIN nzr_dc_detail dtl ON dtl.table_skey = data.table_skey
+			WHERE table_name = ?
+			GROUP BY 
+			  data.table_skey,
+			  src_object_id,
+			  dtl.table_name
+
+    </value>
+ </entry>
+
+
+ <entry>
+  <key><value>columnsChangedIndSql</value></key>
+  <value>
+WITH data AS
+  (SELECT twrk.src_object_id,
+    dattr.table_skey,
+    dattr.attribute_name AS prev_attr_name,
+    wrk.attribute_name   AS curr_attr_name,
+    CASE
+      WHEN dattr.attribute_name != wrk.attribute_name
+      THEN 1
+      ELSE 0
+    END AS name_change_ind,
+    dattr.attribute_position,
+    dattr.datatype AS prev_datatype,
+    wrk.datatype   AS curr_datatype,
+    CASE
+      WHEN dattr.datatype != wrk.datatype
+      THEN 1
+      ELSE 0
+    END               AS datatype_change_ind,
+    dattr.data_length AS prev_data_length,
+    wrk.data_length   AS curr_data_length,
+    CASE
+      WHEN dattr.data_length != wrk.data_length
+      THEN 1
+      ELSE 0
+    END                  AS data_length_change_ind,
+    dattr.data_precision AS prev_data_precision,
+    wrk.data_precision   AS curr_data_precision,
+    CASE
+      WHEN dattr.data_precision != wrk.data_precision
+      THEN 1
+      ELSE 0
+    END              AS data_precision_change_ind,
+    dattr.data_scale AS prev_data_scale,
+    wrk.data_scale   AS curr_data_scale,
+    CASE
+      WHEN dattr.data_scale != wrk.data_scale
+      THEN 1
+      ELSE 0
+    END            AS data_scale_change_ind,
+    dattr.nullable AS prev_nullable,
+    wrk.nullable   AS curr_nullable,
+    CASE
+      WHEN dattr.nullable != wrk.nullable
+      THEN 1
+      ELSE 0
+    END                 AS nullable_change_ind,
+    dattr.dist_position AS prev_dist_position,
+    wrk.dist_position   AS curr_dist_position,
+    CASE
+      WHEN dattr.dist_position != wrk.dist_position
+      OR (dattr.dist_position  IS NOT NULL
+      AND wrk.dist_position    IS NULL)
+      OR (dattr.dist_position  IS NULL
+      AND wrk.dist_position    IS NOT NULL)
+      THEN 1
+      ELSE 0
+    END                AS dist_change_ind,
+    dattr.org_position AS prev_org_position,
+    wrk.org_position   AS curr_org_position,
+    CASE
+      WHEN dattr.org_position != wrk.org_position
+      OR (dattr.org_position  IS NOT NULL
+      AND wrk.org_position    IS NULL)
+      OR (dattr.org_position  IS NULL
+      AND wrk.org_position    IS NOT NULL)
+      THEN 1
+      ELSE 0
+    END                 AS org_change_ind,
+    dattr.default_value AS prev_default,
+    wrk.default_value   AS curr_default,
+    CASE
+      WHEN dattr.default_value != wrk.default_value
+      OR (dattr.default_value  IS NOT NULL
+      AND wrk.default_value    IS NULL)
+      OR (dattr.default_value  IS NULL
+      AND wrk.default_value    IS NOT NULL)
+      THEN 1
+      ELSE 0
+    END                  AS default_change_ind,
+    dattr.column_comment AS prev_comment,
+    wrk.column_comment   AS curr_comment,
+    CASE
+      WHEN dattr.column_comment != wrk.column_comment
+      OR (dattr.column_comment  IS NOT NULL
+      AND wrk.column_comment    IS NULL)
+      OR (dattr.column_comment  IS NULL
+      AND wrk.column_comment    IS NOT NULL)
+      THEN 1
+      ELSE 0
+    END AS comment_change_ind
+  FROM
+    (  SELECT * FROM nzr_dc_detail_attr_hist WHERE dc_batch_skey = ?) dattr
+  FULL OUTER JOIN (SELECT * FROM nzr_wrk_table_attr WHERE dc_batch_skey = ?) wrk 
+  ON ( wrk.table_skey        = dattr.table_skey
+  AND wrk.attribute_position = dattr.attribute_position )
+  INNER JOIN nzr_wrk_table twrk
+  ON wrk.table_skey       = twrk.table_skey
+  AND wrk.dc_batch_skey   = twrk.dc_batch_skey
+  )
+SELECT 
+  dtl.table_name    AS tableName,
+  src_object_Id          AS objectId,
+  curr_attr_name         AS columnName,
+  name_change_ind        AS column_renamed_ind,
+  default_change_ind     AS column_default_changed_ind,
+  comment_change_ind     AS column_comment_changed_ind,
+  data_length_change_ind AS column_length_changed_ind
+FROM data
+INNER JOIN nzr_dc_detail dtl
+ON ( dtl.table_skey = data.table_skey )
+WHERE greatest(dist_change_ind, nullable_change_ind, data_precision_change_ind, data_scale_change_ind) = 0 -- do not include rebuilt tables
+AND greatest(name_change_ind, org_change_ind, default_change_ind, comment_change_ind, data_length_change_ind)               = 1 --only include columns with a change
+AND table_name = ?
+  </value>
+ </entry>
+ 
+ <entry>
+  <key><value>insertBatchDetailInfoSql</value></key>
+  <value>
+    INSERT INTO nzr_dc_batch_detail (dc_batch_dtl_skey, dc_batch_skey, table_skey, src_object_id, start_ts, status, insert_cnt, delete_cnt, ddl_flag, low_stable_xid) 
+     VALUES(?,?,?,?, sysdate, ?, 0, 0, 0, ?)
+  </value>
+ </entry>
+ 
+ <entry><key><value>updateBatchDetailSql</value></key>
+ <value>
+   update nzr_dc_batch_detail set ent_ts = sysdate, status = ?, insert_cnt = ?, delete_cnt = ?, ddl_flag = ? where dc_batch_dtl_skey = ?
+ </value>
+ </entry>
+ 
+ 
+ 
+ 
+ <entry><key><value>updateBatchInfoSql</value></key>
+ <value>
+ update nzr_dc_batch set dc_batch_end_ts = sysdate , dc_batch_status = ? where dc_batch_skey = ?
+ </value></entry>
+ 
+ 
+ <entry>
+	<key>
+		<value>getPKColsSql</value>
+	</key>
+	<value>
+		WITH d1 AS
+		(
+		SELECT 
+			ca.constraint_attribute_position,
+			ca.attribute_name,
+			row_number() over (order by ca.constraint_attribute_position DESC) AS rn
+		FROM nzr_dc_constraint_hist C
+			INNER JOIN nzr_dc_constraint_attr_hist CA
+			ON ( CA.TABLE_SKEY = C.TABLE_SKEY
+			AND CA.CONSTRAINT_SKEY = C.CONSTRAINT_SKEY )
+		WHERE 
+		  c.table_skey = ? AND 
+		  c.constraint_type IN ('p','P')
+		),
+		d AS
+		(
+		SELECT 
+		  constraint_attribute_position,
+		  attribute_name,
+		  rn,
+		  SUBSTR(sys_connect_by_path(attribute_name,', '), 2) AS cols
+		FROM d1
+		START WITH constraint_attribute_position = 1
+		CONNECT BY prior constraint_attribute_position = (constraint_attribute_position - 1)
+		)
+		SELECT cols FROM d WHERE rn = 1
+	</value>
+</entry>
+
+<entry>
+<key><value>moveWrkTable_Sql</value></key>
+<value>
+	INSERT INTO nzr_dc_detail_hist (table_skey, dc_batch_skey, dc_batch_dtl_skey, table_name, src_object_id, last_ddl_ts, column_cnt,table_comment)
+	  SELECT table_skey,  dc_batch_skey, ?, table_name, src_object_id, last_ddl_ts,column_cnt, table_comment
+	  FROM nzr_wrk_table WHERE table_skey = ? and dc_batch_skey = ?
+</value>
+</entry>
+
+<entry>
+<key><value>moveWrkTableAttr_Sql</value></key>
+ <value>
+	   INSERT INTO  nzr_dc_detail_attr_hist (table_skey, dc_batch_skey, dc_batch_dtl_skey,  attribute_name, attribute_position, datatype, data_length, data_precision, 
+  											data_scale, nullable, dist_position, org_position, default_value, column_comment)
+        SELECT table_skey, dc_batch_skey, ?, attribute_name, attribute_position, datatype, data_length, data_precision, data_scale, nullable, dist_position, org_position, default_value, column_comment
+        FROM nzr_wrk_table_attr WHERE table_skey = ? and dc_batch_skey = ?
+ </value>
+</entry>
+
+<entry>
+    <key><value>moveWrkConstr_Sql</value></key>
+    <value>
+         INSERT INTO nzr_dc_constraint_hist (constraint_skey, dc_batch_skey, dc_batch_dtl_skey, table_skey, constraint_name, constraint_type, pk_table_name, update_type, delete_type, match_type)
+           SELECT nzr_constraint_seq.nextval, dc_batch_skey, ?, table_skey, constraint_name, constraint_type, pk_table_name, update_type, delete_type, match_type 
+           FROM nzr_wrk_constraints WHERE table_skey = ? and dc_batch_skey = ?
+    </value>
+</entry>
+
+<entry>
+	<key>
+		<value>getConstrNameAndSkey_Sql</value>
+	</key>
+	<value>
+		SELECT constraint_name, constraint_skey FROM nzr_dc_constraint_hist WHERE table_skey = ? and dc_batch_skey = ?
+	</value>
+</entry>
+      
+
+<entry>
+    <key><value>moveWrkConstrAttr_Sql</value></key>
+    <value>
+        INSERT INTO nzr_dc_constraint_attr_hist (constraint_skey, dc_batch_skey, dc_batch_dtl_skey, table_skey, attribute_name, constraint_attribute_position, pk_attribute_name)
+		    SELECT ?, dc_batch_skey, ?, table_skey, attribute_name, constraint_attribute_position, pk_attribute_name 
+		    FROM nzr_wrk_constraint_attr WHERE constraint_name = ? and dc_batch_skey = ?
+    </value>
+</entry>
+
+<entry>
+ <key>
+  <value>selectAllSchedulesSql</value>
+ </key>
+  <value>SELECT * FROM nzr_schedules WHERE enabled_flag = 1</value>
+</entry>
+
+
+<entry>
+ <key>
+  <value>selectOnDemandSchedulesSql</value>
+ </key>
+ <value>
+    SELECT scheduler_skey,
+  		dc_skey,
+  		schedule_name,
+  		start_time,
+  		batch_type
+	FROM nzr_od_schedules
+</value>
+</entry>
+
+<entry>
+	<key>
+		<value>previousBatch_Sql-old</value>
+	</key>
+	<value>
+		SELECT MAX(dc_batch_skey)
+		FROM nzr_dc_batch
+		WHERE dc_batch_skey &lt; ?
+		AND dc_skey = ? AND dc_batch_status = 'COMPLETED'
+	</value>
+</entry>
+
+
+<entry>
+	<key>
+		<value>previousBatch_Sql</value>
+	</key>
+	<value>
+		SELECT MAX(det.dc_batch_skey)
+		FROM nzr_dc_detail_hist det 
+		INNER JOIN nzr_dc_detail dc ON dc.table_skey = det.table_skey
+        INNER JOIN nzr_dc_batch b on b.dc_batch_skey = det.dc_batch_skey
+		WHERE det.dc_batch_skey &lt; ? AND b.dc_batch_status = 'COMPLETED'
+		AND dc.dc_skey = ? and det.table_skey = ?
+
+	</value>
+</entry>
+
+<entry>
+	<key>
+		<value>countPreviousFullBatch_Sql</value>
+	</key>
+	<value>
+		SELECT COUNT(*)
+		FROM nzr_dc_batch_detail det
+		INNER JOIN nzr_dc_batch b
+		ON det.dc_batch_skey  = b.dc_batch_skey
+		WHERE b.dc_batch_skey &lt;?
+		AND b.dc_skey         = ?
+		AND b.dc_batch_status = 'COMPLETED'
+		AND det.table_skey    = ?
+		AND  (b.dc_batch_type   = 'F' or 
+             b.dc_batch_type = 'T')
+	</value>
+</entry>
+
+<entry>
+	<key>
+		<value>insertBatchFolder_Sql</value>
+	</key>
+	<value>
+	    INSERT INTO nzr_stg_folder(folder_skey, dc_batch_skey, folder_name) VALUES (?, ? , ?)
+	</value>
+</entry>
+
+<entry>
+	<key>
+		<value>insertBatchFile_Sql</value>
+	</key>
+	<value>
+		INSERT INTO nzr_stg_file (file_skey, dc_batch_skey, folder_skey, dc_batch_dtl_skey, file_name, file_format, file_content,
+		                            file_location)
+		VALUES (NZR_FILE_SEQ.nextval, ?, ?, ?, ?, ?, ?, ?)
+	</value>
+</entry>
+
+
+<entry>
+	<key>
+		<value>runningToErrorBatchStatus_Sql</value>
+	</key>
+	<value>
+		UPDATE nzr_dc_batch
+		SET dc_batch_status   = 'ERROR'
+		WHERE dc_batch_status = 'RUNNING'
+		AND dc_skey = ?
+	</value>
+</entry>
+
+<entry>
+	<key>
+		<value>runningToErrorBatchDetailStatus_Sql</value>
+	</key>
+	<value>
+		UPDATE nzr_dc_batch
+		SET dc_batch_status   = 'ERROR'
+		WHERE dc_batch_status = 'RUNNING'
+		AND dc_batch_skey IN (SELECT dc_batch_skey FROM nzr_dc_batch WHERE dc_skey = ?)
+	</value>
+</entry>
+
+<entry>
+	<key>
+		<value>runningToErrorBatchStatusAllSets_Sql</value>
+	</key>
+	<value>
+		UPDATE nzr_dc_batch
+		SET dc_batch_status   = 'ERROR'
+		WHERE dc_batch_status = 'RUNNING'
+	</value>
+</entry>
+
+<entry>
+	<key>
+		<value>runningToErrorBatchDetailStatusAllSets_Sql</value>
+	</key>
+	<value>
+		UPDATE nzr_dc_batch_detail
+		SET status   = 'ERROR'
+		WHERE status = 'RUNNING'
+	</value>
+</entry>
+
+
+<entry>
+	<key>
+		<value>configuredSystemByDcSkey_Sql</value>
+	</key>
+	<value>
+       SELECT 
+          host_skey,
+		  host_name,
+		  dns_ip,
+		  host_port,
+		  username,
+		  password,
+		  src_db_name as databaseName
+		FROM nzr_host h,
+		  nzr_dc_set dc
+		WHERE h.host_skey = dc.src_host_skey
+		AND dc.dc_skey  = ?
+		</value></entry>
+ </map>
+ </property>
+ </bean>
+ 
+</beans>
+
+
+					

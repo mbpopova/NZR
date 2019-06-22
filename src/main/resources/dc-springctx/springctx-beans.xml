@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+        http://www.springframework.org/schema/context 
+        http://www.springframework.org/schema/context/spring-context-3.0.xsd">
+
+	<context:annotation-config />
+	
+
+    <!--Managers -->
+	<bean id="dataCaptureManager" class="mycompany.nzr.dc.DataCaptureManager" />
+	<bean id="ddlManager" class="mycompany.nzr.dc.DdlManager" />
+	<bean id="dataTransferManager" class="mycompany.nzr.dc.TransferManager">
+		<property name="logDirectory" value="d:\\pss\\NZR\\junit-tests\\transferlogs" />
+		<property name="parallelism" value="1" />
+	</bean>
+	
+	<bean id="dataCaptureDdlWriter" class="mycompany.nzr.dc.DataCaptureDdlWriter" />
+	
+	<!--DAOs -->
+	<bean id="dcSrcDAO" class="mycompany.nzr.dc.dao.DataCaptureSrcDAO" />
+	<bean id="dcRepoDAO" class="mycompany.nzr.dc.dao.DataCaptureRepoDAO" />
+	<bean id="ddlSourceDAO" class="mycompany.nzr.dc.dao.DataCaptureDdlSourceDAO" />
+	<bean id="dataTransferDAO" class="mycompany.nzr.dc.dao.DataCaptureTransferDAO" />
+
+
+	<!--Repo db-->
+
+	<bean id="oracleDataSource" class="org.apache.commons.dbcp.BasicDataSource">
+		<property name="driverClassName" value="oracle.jdbc.driver.OracleDriver" />
+		<property name="url" value="jdbc:oracle:thin:@localhost:1521:pss" />
+		<property name="username" value="pss" />
+		<property name="password" value="free" />
+		<property name="initialSize" value="3" />
+		<property name="maxActive" value="10" />
+	</bean>
+	
+	<bean id="jdbcTemplateOra" class="org.springframework.jdbc.core.JdbcTemplate">
+		<property name="dataSource" ref="oracleDataSource" />
+		<property name="fetchSize" value="100" />
+		<property name="maxRows" value="100" />
+		<property name="queryTimeout" value="100000" />
+	</bean>
+	
+<!-- Src db Netezza - use dynamic data source and template instead--> 
+
+	<bean id="netezzaDataSource" class="org.apache.commons.dbcp.BasicDataSource" scope="prototype">
+		<property name="driverClassName" value="org.netezza.Driver" />
+		<property name="url" value="" />
+		<property name="username" value="" />
+		<property name="password" value="" />
+		<property name="initialSize" value="3" />
+		<property name="maxActive" value="10" />
+	</bean>
+	
+	<bean id="jdbcTemplateNz" class="org.springframework.jdbc.core.JdbcTemplate">
+		<property name="dataSource" ref="netezzaDataSource" />
+		<property name="fetchSize" value="100" />
+		<property name="maxRows" value="100" />
+		<property name="queryTimeout" value="100000" />
+	</bean>
+ 
+</beans>

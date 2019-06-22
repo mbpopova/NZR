@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+        http://www.springframework.org/schema/context 
+        http://www.springframework.org/schema/context/spring-context-3.0.xsd">
+
+	<context:annotation-config />
+	
+	<bean id="ddlFactory" class="mycompany.nzr.dc.ddlfactory.DdlFactory" />
+	<bean id="createConstraintFactory" class="mycompany.nzr.dc.ddlfactory.CreateConstraintFactory" />
+	<bean id="createTableFactory" class="mycompany.nzr.dc.ddlfactory.CreateTableFactory" />
+	<bean id="dropConstraintFactory" class="mycompany.nzr.dc.ddlfactory.DropConstraintFactory" />
+	<bean id="dropRenameTableFactory" class="mycompany.nzr.dc.ddlfactory.DropRenameTableFactory" />
+	<bean id="extendVarcharColumnFactory" class="mycompany.nzr.dc.ddlfactory.ExtendVarcharColumnFactory" />
+	<bean id="renameColumnFactory" class="mycompany.nzr.dc.ddlfactory.RenameColumnFactory" />
+	<bean id="updateFactory" class="mycompany.nzr.dc.ddlfactory.UpdateFactory" />
+	<bean id="updateOrganizeOnFactory" class="mycompany.nzr.dc.ddlfactory.UpdateOrganizeOnFactory" />
+
+	
+	<!-- SM beans -->
+	<bean id="storageManager" class="mycompany.nzr.sm.StorageManager">
+		<property name="root" value="d:\\pss\\NZR\\junit-tests\\" />
+	</bean>
+
+	<bean id="smRepoDAO" class="mycompany.nzr.sm.StorageMgmtRepoDAO" />
+	<bean id="smSqlBuilder" class="mycompany.nzr.sm.StorageMgmtSqlBuilder" />
+</beans>

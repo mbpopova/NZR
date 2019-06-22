@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans 
+        http://www.springframework.org/schema/beans/spring-beans-3.0.xsd
+        http://www.springframework.org/schema/context 
+        http://www.springframework.org/schema/context/spring-context-3.0.xsd">
+
+	<context:annotation-config />
+
+	<bean id="ddlSourceSQLBuilder" class="mycompany.nzr.dc.sqlbuilder.DataCaptureDdlSourceSqlBuilder">
+		<property name="sql">
+			<map>
+				<entry>
+	<key>
+		<value>createFKConstraintSQL</value>
+	</key>
+	<value>
+		SELECT t.table_name,
+				c.constraint_name,
+				ca.constraint_attribute_position,
+				ca.attribute_name,
+				c.pk_table_name,
+				ca.pk_attribute_name,
+				c.match_type,
+				c.update_type,
+				c.delete_type
+		FROM nzr_dc_detail_hist t
+				INNER JOIN nzr_dc_constraint_hist c
+				ON ( c.table_skey = t.table_skey and c.dc_batch_skey = t.dc_batch_skey)
+				INNER JOIN nzr_dc_constraint_attr_hist ca
+				ON ( ca.constraint_skey = c.constraint_skey)
+		WHERE t.table_skey = ?
+		AND c.constraint_type IN ('F', 'f')
+		AND c.constraint_name = ?
+		AND t.dc_batch_skey = ?
+	</value>
+</entry>
+
+<entry>
+	<key>
+		<value>createFKsForTable_Sql</value>
+	</key>
+	<value>
+		SELECT t.table_name,
+				c.constraint_name,
+				ca.constraint_attribute_position,
+				ca.attribute_name,
+				c.pk_table_name,
+				ca.pk_attribute_name,
+				c.match_type,
+				c.update_type,
+				c.delete_type
+		FROM nzr_dc_detail_hist t
+				INNER JOIN nzr_dc_constraint_hist c
+				ON ( c.table_skey = t.table_skey and c.dc_batch_skey = t.dc_batch_skey)
+				INNER JOIN nzr_dc_constraint_attr_hist ca
+				ON ( ca.constraint_skey = c.constraint_skey)
+		WHERE t.table_skey = ?
+		AND c.constraint_type IN ('F', 'f')
+		AND t.dc_batch_skey = ?
+	</value>
+</entry>
+				
+<entry>
+	<key>
+		<value>primaryKeyConstraintSQL</value>
+	</key>
+	<value>
+		SELECT
+			t.dc_batch_skey,
+			t.table_name,
+			c.constraint_name,
+			ca.constraint_attribute_position,
+			ca.attribute_name
+		FROM nzr_dc_detail_hist t
+				INNER JOIN nzr_dc_constraint_hist c
+				ON ( c.table_skey = t.table_skey
+				AND c.dc_batch_skey = t.dc_batch_skey )
+				INNER JOIN nzr_dc_constraint_attr_hist ca
+				ON ( ca.table_skey = c.table_skey
+				AND ca.constraint_skey = c.constraint_skey )
+		WHERE 
+		   t.table_skey = ?
+		   AND c.constraint_type IN ('P', 'p')
+		   AND c.constraint_name = ?
+		   AND t.dc_batch_skey = ?
+	</value>
+</entry>
+
+<entry>
+	<key>
+		<value>createPKsForTable_Sql</value>
+	</key>
+	<value>
+		SELECT
+			t.dc_batch_skey,
+			t.table_name,
+			c.constraint_name,
+			ca.constraint_attribute_position,
+			ca.attribute_name, ca.pk_attribute_name, c.pk_table_name
+		FROM nzr_dc_detail_hist t
+				INNER JOIN nzr_dc_constraint_hist c
+				ON ( c.table_skey = t.table_skey
+				AND c.dc_batch_skey = t.dc_batch_skey )
+				INNER JOIN nzr_dc_constraint_attr_hist ca
+				ON ( ca.table_skey = c.table_skey
+				AND ca.constraint_skey = c.constraint_skey )
+		WHERE 
+		   t.table_skey = ?
+		   AND c.constraint_type IN ('P', 'p')
+		   AND t.dc_batch_skey = ?
+	</value>
+</entry>
+
+
+<entry>
+	<key>
+		<value>extendVarcharColumnSQL</value>
+	</key>
+	<value>
+		SELECT
+				t.table_name,
+				ta.attribute_name as column_name,
+				ta.data_length AS new_length
+		FROM nzr_dc_detail_hist t
+		   INNER JOIN nzr_dc_detail_attr_hist ta ON ( ta.table_skey = t.table_skey AND ta.dc_batch_skey = t.dc_batch_skey )
+		WHERE
+				t.table_skey = ? AND
+				ta.attribute_name = ? AND
+				t.dc_batch_skey = ?
+	</value>
+</entry>
+
+
+	<entry>
+	<key>
+		<value>renameColumnSQL</value>
+	</key>
+	<value>
+		WITH data AS 
+		(
+				SELECT
+						old_ta.attribute_name oldName,
+						new_ta.attribute_name newName,
+						new_ta.table_skey new_table_skey
+				FROM
+				(SELECT * FROM nzr_dc_detail_attr_hist WHERE table_skey = ? AND	dc_batch_skey = ?) old_ta
+				INNER JOIN 	(SELECT * FROM nzr_dc_detail_attr_hist WHERE dc_batch_skey = ? AND	table_skey = ?) new_ta
+				  ON (new_ta.attribute_position = old_ta.attribute_position)
+		) 
+		 SELECT newname, oldname, table_name FROM data  
+		 INNER JOIN nzr_dc_detail  det ON data.new_table_skey = det.table_skey 
+		 WHERE newname = ?
+	</value>
+</entry>
+
+
+	<entry>
+		<key>
+			<value>tableSQL</value>
+		</key>
+		<value>
+			SELECT
+			t.TABLE_NAME,
+			a.ATTRIBUTE_NAME,
+			a.DATATYPE,
+			a.DATA_LENGTH,
+			a.DATA_PRECISION,
+			a.DATA_SCALE,
+			a.NULLABLE,
+			a.DIST_POSITION,
+			a.ORG_POSITION,
+			a.DEFAULT_VALUE,
+			a.COLUMN_COMMENT,
+			a.attribute_position as columnPosition
+			FROM
+			NZR_DC_DETAIL_ATTR_HIST a
+			INNER JOIN
+			NZR_DC_DETAIL t
+			ON
+			(
+			t.TABLE_SKEY = a.TABLE_SKEY
+			)
+			WHERE
+			a.TABLE_SKEY = ?
+			ORDER BY
+			a.ATTRIBUTE_POSITION
+
+		</value>
+	</entry>
+
+				<entry>
+	<key>
+		<value>uniqueKeyConstraintSQL</value>
+	</key>
+	<value>
+		SELECT 
+			t.table_name,
+			c.constraint_name,
+			ca.constraint_attribute_position,
+			ca.attribute_name
+		FROM nzr_dc_detail_hist t
+				INNER JOIN nzr_dc_constraint_hist c
+				ON ( c.table_skey = t.table_skey
+				AND c.dc_batch_skey = t.dc_batch_skey )
+				INNER JOIN nzr_dc_constraint_attr_hist ca
+				ON ( ca.constraint_skey = c.constraint_skey )
+		WHERE t.table_skey = ?
+		AND c.constraint_type IN ('U', 'u')
+		AND c.constraint_name = ?
+		AND c.dc_batch_skey = ?
+
+	</value>
+</entry>
+
+				
+				<entry>
+	<key>
+		<value>createUniqueConstrsForTable_Sql</value>
+	</key>
+	<value>
+		SELECT 
+			t.table_name,
+			c.constraint_name,
+			ca.constraint_attribute_position,
+			ca.attribute_name
+		FROM nzr_dc_detail_hist t
+				INNER JOIN nzr_dc_constraint_hist c
+				ON ( c.table_skey = t.table_skey
+				AND c.dc_batch_skey = t.dc_batch_skey )
+				INNER JOIN nzr_dc_constraint_attr_hist ca
+				ON ( ca.constraint_skey = c.constraint_skey )
+		WHERE t.table_skey = ?
+		AND c.constraint_type IN ('U', 'u')
+		AND c.dc_batch_skey = ?
+
+	</value>
+</entry>
+
+				<entry>
+					<key>
+						<value>updateColumnCommentSQL</value>
+					</key>
+					<value>
+						            
+						 SELECT 
+							  t.table_name,
+							  ta.attribute_name,
+							  ta.column_comment
+						FROM nzr_dc_detail_hist t
+						INNER JOIN nzr_dc_detail_attr_hist ta
+						ON ( ta.table_skey    = t.table_skey and t.dc_batch_skey = ta.dc_batch_skey)
+						WHERE t.table_name    = ?
+						AND ta.attribute_name = ?
+						AND t.dc_batch_skey   = ?
+					</value>
+				</entry>
+
+				<entry>
+					<key>
+						<value>updateDefaultValueSQL</value>
+					</key>
+					<value>
+						SELECT t.table_name,
+								ta.attribute_name,
+								ta.default_value,
+								t.dc_batch_skey
+						FROM nzr_dc_detail_hist t
+						INNER JOIN nzr_dc_detail_attr_hist ta
+						   ON ( ta.table_skey = t.table_skey AND ta.dc_batch_skey = t.dc_batch_skey )
+						WHERE t.table_name = ?
+						AND ta.attribute_name = ?
+						AND t.dc_batch_skey = ?
+					</value>
+				</entry>
+
+				<entry>
+					<key>
+						<value>updateOrganizeOnSQL</value>
+					</key>
+					<value>
+							WITH data AS
+							  (
+							   SELECT 
+							    wrk.org_position,
+							    dattr.table_skey,
+							    wrk.attribute_name   AS curr_attr_name,
+							  CASE
+							      WHEN dattr.org_position != wrk.org_position
+							      OR (dattr.org_position  IS NOT NULL
+							      AND wrk.org_position    IS NULL)
+							      OR (dattr.org_position  IS NULL
+							      AND wrk.org_position    IS NOT NULL)
+							      THEN 1
+							      ELSE 0
+							    END                 AS org_change_ind
+							  FROM
+							    (SELECT * FROM nzr_dc_detail_attr_hist WHERE dc_batch_skey = ?
+							    ) dattr
+							  FULL OUTER JOIN (SELECT * FROM nzr_wrk_table_attr WHERE dc_batch_skey = ?) wrk
+							     ON ( wrk.table_skey        = dattr.table_skey
+							     AND wrk.attribute_position = dattr.attribute_position )
+							)
+							SELECT 
+							  org_position,
+							  curr_attr_name AS attribute_name,
+							 -- dtl.table_skey,
+							  dtl.table_name
+							--  org_change_ind
+							FROM data 
+							INNER JOIN nzr_dc_detail dtl ON dtl.table_skey = data.table_skey
+							WHERE table_name = ? AND org_change_ind = 1 and org_position IS NOT NULL
+					</value>
+				</entry>
+
+				<entry>
+					<key>
+						<value>updateTableCommentSQL</value>
+					</key>
+					<value>
+	SELECT
+		t.table_name,
+		t.table_comment
+	FROM
+		nzr_dc_detail_hist t
+	WHERE
+		t.table_name = ? AND dc_batch_skey = ?
+					</value>
+				</entry>
+				
+
+			</map>
+		</property>
+	</bean>
+</beans>
+			
+ 

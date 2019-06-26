@@ -24,21 +24,4 @@ public class ExtendVarcharColumnFactory {
 		}
 		return bfr.toString();
 	}
-	public static void main(String[] args) {
-		ExtendVarcharColumnDTO dto1 = new ExtendVarcharColumnDTO();
-		dto1.setColumnName("TestCol1");
-		dto1.setNewLength(10);
-		dto1.setTableName("TestTbl1");
-		
-		ExtendVarcharColumnDTO dto2 = new ExtendVarcharColumnDTO();
-		dto2.setColumnName("TestCol2");
-		dto2.setNewLength(20);
-		dto2.setTableName("TestTbl2");
-
-		System.out.print(new ExtendVarcharColumnFactory()
-				.getExtendVarcharColumnDDL(Arrays
-						.asList(new ExtendVarcharColumnDTO[] { dto1, dto2 })));
-
-	}
-
 }

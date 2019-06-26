@@ -20,7 +20,7 @@ public class MultiTemplateDAO {
 		org.springframework.jdbc.core.JdbcTemplate template = new org.springframework.jdbc.core.JdbcTemplate();
 
 		DataSource netezzaDatasource = new BasicDataSource();
-		// Example URL - jdbc:netezza://192.168.233.128:5480/NZR
+		
 		((BasicDataSource) netezzaDatasource).setDriverClassName(DRIVER_CLASS);
 		((BasicDataSource) netezzaDatasource).setUrl(getUrl(system));
 		((BasicDataSource) netezzaDatasource).setPassword(system.getPassword());

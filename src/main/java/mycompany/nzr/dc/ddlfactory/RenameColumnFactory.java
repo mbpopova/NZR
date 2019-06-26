@@ -24,14 +24,5 @@ public class RenameColumnFactory {
 	
 		return bfr.toString();
 	}
-	
-	public static void main(String[] args) {
-		RenameColumnDTO dto = new RenameColumnDTO();
-		dto.setNewName("NewName");
-		dto.setOldName("OldName");
-		dto.setTableName("TableName");
-		System.out.print(new RenameColumnFactory().getRenameColumnDDL(Arrays.asList(new RenameColumnDTO[]{dto})));
-
-	}
 
 }
